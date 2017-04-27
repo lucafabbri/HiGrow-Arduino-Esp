@@ -179,7 +179,7 @@ void sendHtmlHeader(){
     "<style>"
     "input,select,textarea{display: block;width: 100%;padding: 8px 16px;font-size: 18px;line-height: 22px;color: #555;background-color: #fff;background-image: none;border: 1px solid #ccc;border-radius: 0px;-webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075);box-shadow: inset 0 1px 1px rgba(0,0,0,.075);-webkit-transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;-o-transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;}"
     ".button{padding:8px 16px;color:#A4CA64;border:2px solid #A4CA64;text-decoration:none; font-weight:600;background-color:white;font-size:18px;line-height:22px;}"
-    "body{padding:0px;margin:0px;font-size:18px;line-height:22px;font-family:helvetica,sans-serif;}"
+    "body{padding:0px;margin:0px;font-size:18px;line-height:22px;font-family:helvetica,sans-serif;color:white;backgrond-color:#313130;}"
     "</style>"
     "</head>"
     "<body>"
