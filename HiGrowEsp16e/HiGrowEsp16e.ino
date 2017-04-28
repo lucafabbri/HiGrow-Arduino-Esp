@@ -1,6 +1,6 @@
 #include <RestClient.h>
 #include <SimpleDHT.h>
-#include <ArduinoJson.h>
+//#include <ArduinoJson.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
@@ -13,9 +13,9 @@ const size_t MAX_CONTENT_SIZE = 4096;
 const unsigned long HTTP_TIMEOUT = 10000;  // max respone time from server
 
 const char *softAP_ssid = "HiGrowSetupWiFi";
-const char *softAP_password = "HiGrowSetupWiFi";
+//const char *softAP_password = "HiGrowSetupWiFi";
 
-const char *myHostname = "igrow";
+const char *myHostname = "higrow";
 const char* host = "higrowapp.azurewebsites.net";
 
 char ssid[32] = "";
@@ -81,7 +81,7 @@ void setApMode(){
   waitTime = 50;
   /* You can remove the password parameter if you want the AP to be open. */
   WiFi.softAPConfig(apIP, apIP, netMsk);
-  WiFi.softAP(softAP_ssid, softAP_password);
+  WiFi.softAP(softAP_ssid);
   delay(500); // Without delay I've seen the IP address blank
   
   /* Setup the DNS server redirecting all the domains to the apIP */  
