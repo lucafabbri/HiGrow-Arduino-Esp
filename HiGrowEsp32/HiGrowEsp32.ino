@@ -22,9 +22,26 @@ char deviceid[21];
 void setup() {
   Serial.begin(115200);
 
+  preferences.begin("higrow", false);
+
   pinMode(16, OUTPUT);
 
-  digitalWrite(16, LOW);
+  for (int i = 0; i < 30; i++) {
+    int led = digitalRead(16);
+    if (led == HIGH) {
+      digitalWrite(16, LOW);
+    } else {
+      digitalWrite(16, HIGH);
+    }
+    if (i == 299) {
+      digitalWrite(16, HIGH);
+    }
+    delay(100);
+  }
+
+  if (analogRead(0) == 0) {
+    preferences.clear();
+  }
 
   timeout = 0;
 
@@ -32,7 +49,6 @@ void setup() {
   sprintf(deviceid, "%" PRIu64, chipid);
   Serial.println(deviceid);
 
-  preferences.begin("higrow", false);
   String ssid = preferences.getString("ssid");
   String pwd = preferences.getString("pwd");
 
@@ -49,6 +65,7 @@ void setup() {
     }
 
     digitalWrite(16, HIGH);
+    Serial.println("");
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
@@ -77,7 +94,7 @@ void setup() {
       delay(500);
       Serial.print(".");
     }
-
+    Serial.println("");
     Serial.println("WiFi Connected.");
 
     preferences.putString("ssid", WiFi.SSID());
@@ -91,7 +108,8 @@ void setup() {
 }
 
 void loop() {
-  digitalWrite(16, HIGH);
+  digitalWrite(16, LOW);
+  bool isSetup = preferences.getBool("isSetup", true);
   char body[1024];
   timeout = millis();
   WiFiClient client = server.available();   // listen for incoming clients
@@ -99,9 +117,7 @@ void loop() {
   byte temperature = 0;
   byte humidity = 0;
   byte data[40] = {0};
-  if (dht11.read(2, &temperature, &humidity, data)) {
-    Serial.print("Read DHT11 failed");
-  }
+  dht11.read(2, &temperature, &humidity, data);
   String did = String(deviceid);
   String water = String(analogRead(0));
   String temp = String((double)temperature);
@@ -116,14 +132,14 @@ void loop() {
   strcat(body, "\",\"temperature\":\"");
   strcat(body, temp.c_str());
   strcat(body, "\"}");
+  if (!isSetup) {
+    http.begin("http://higrowapp.azurewebsites.net/api/records");
+    http.addHeader("Content-Type", "application/json");
+    int httpResponseCode = http.POST(body);
 
-  http.begin("http://higrowapp.azurewebsites.net/api/records");
-  http.addHeader("Content-Type", "application/json");
-  int httpResponseCode = http.POST(body);
-
-  Serial.println(httpResponseCode);
-  Serial.println(body);
-
+    Serial.println(httpResponseCode);
+    Serial.println(body);
+  }
   if (client) {                             // print a message out the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected()) {            // loop while the client's connected
@@ -163,7 +179,6 @@ void loop() {
     preferences.putBool("isSetup", false);
     digitalWrite(16, LOW);
   }
-  bool isSetup = preferences.getBool("isSetup", true);
   if (!isSetup) {
     Serial.println("Entering sleep mode");
     system_deep_sleep(60000000 * 10);
