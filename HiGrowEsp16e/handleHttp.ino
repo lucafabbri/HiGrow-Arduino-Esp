@@ -118,7 +118,7 @@ void handleNotFound() {
 void handleSensor(){
   sendHtmlHeader();
   server.sendContent(
-    "<h1>LA TUA PIANTA</h1>"
+    "<h3>Dati sensori</h3> <div>"
   );
   double anavalue = ((double)analogRead(anaGrow)/1023)*100;
   byte temperature = 0;
@@ -147,11 +147,11 @@ void handleSensor(){
   );
   server.sendContent(String(humidity));
   server.sendContent(
-    "%</p>"
+    "%</p></div>"
   );
   server.sendContent(
-    "<p><a class='button' href='/start'>Avvia modalit&agrave; sensore Iot</a></p>"
-    "<p><a class='button' href='/'>Torna alla home</a></p>"
+    "<div><a class='button' href='/start'>Avvia modalit&agrave; sensore Iot</a></div>"
+    "<div><a class='button' href='/'>Torna alla home</a></div>"
   );
   sendHtmlFooter();
   server.client().stop(); 
@@ -164,7 +164,7 @@ void handleStart(){
     "<h3>Ora HiGrow &egrave; in modalit&agrave; sensore. Inseriscilo nel terreno.</h3>"
   );
   server.sendContent(
-    "<p>Per riavviare la modalità setup riavviare il tuo device</p>"
+    "<p>Per riavviare la modalit&agrave; setup riavviare il tuo device</p>"
   );
   sendHtmlFooter();
   server.client().stop(); 

@@ -15,7 +15,7 @@ const unsigned long HTTP_TIMEOUT = 10000;  // max respone time from server
 const char *softAP_ssid = "HiGrowSetupWiFi";
 //const char *softAP_password = "HiGrowSetupWiFi";
 
-const char *myHostname = "higrow";
+const char *myHostname = "higrow.tech";
 const char* host = "higrowapp.azurewebsites.net";
 
 char ssid[32] = "";
@@ -85,7 +85,7 @@ void setApMode(){
   delay(500); // Without delay I've seen the IP address blank
   
   /* Setup the DNS server redirecting all the domains to the apIP */  
-  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+  //dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(DNS_PORT, "*", apIP);
   
   /* Setup web pages: root, wifi config pages, SO captive portal detectors and not found. */
@@ -94,9 +94,9 @@ void setApMode(){
   server.on("/wifi", handleWifi);
   server.on("/wifisave", handleWifiSave);
   server.on("/start", handleStart);
-  server.on("/generate_204", handleRoot);  //Android captive portal. Maybe not needed. Might be handled by notFound handler.
-  server.on("/fwlink", handleRoot);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
-  server.onNotFound ( handleNotFound );
+  //server.on("/generate_204", handleRoot);  //Android captive portal. Maybe not needed. Might be handled by notFound handler.
+  //server.on("/fwlink", handleRoot);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
+  //server.onNotFound ( handleNotFound );
   server.begin(); // Web server start
   delay(waitTime);
 }
