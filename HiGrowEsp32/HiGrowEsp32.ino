@@ -119,7 +119,7 @@ void loop() {
   byte data[40] = {0};
   dht11.read(2, &temperature, &humidity, data);
   String did = String(deviceid);
-  String water = String(analogRead(0));
+  String water = String(analogRead(4));
   String temp = String((double)temperature);
   String humi = String((int)humidity);
 
