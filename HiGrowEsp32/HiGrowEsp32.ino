@@ -25,6 +25,7 @@ void setup() {
   preferences.begin("higrow", false);
 
   pinMode(16, OUTPUT);
+  pinMode(0, INPUT);
   digitalWrite(16, HIGH);
 
   for (int j = 0; j < 30; j++) {
