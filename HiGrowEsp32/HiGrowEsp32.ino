@@ -25,22 +25,22 @@ void setup() {
   preferences.begin("higrow", false);
 
   pinMode(16, OUTPUT);
+  digitalWrite(16, HIGH);
 
-  for (int i = 0; i < 30; i++) {
-    int led = digitalRead(16);
-    if (led == HIGH) {
+  for (int j = 0; j < 30; j++) {
+    int reada = analogRead(0);
+    if (reada < 10) {
+      preferences.clear();
       digitalWrite(16, LOW);
-    } else {
+      delay(100);
       digitalWrite(16, HIGH);
-    }
-    if (i == 299) {
+      delay(100);
+      digitalWrite(16, LOW);
+      delay(100);
       digitalWrite(16, HIGH);
+      j=30;
     }
     delay(100);
-  }
-
-  if (analogRead(0) == 0) {
-    preferences.clear();
   }
 
   timeout = 0;
