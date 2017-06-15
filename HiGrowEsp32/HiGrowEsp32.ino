@@ -24,13 +24,12 @@ void setup() {
 
   preferences.begin("higrow", false);
 
-  pinMode(16, OUTPUT);
+  pinMode(16, OUTPUT); 
   pinMode(0, INPUT);
   digitalWrite(16, HIGH);
 
   for (int j = 0; j < 30; j++) {
-    int reada = analogRead(0);
-    if (reada < 10) {
+    if (digitalRead(0) == LOW) {
       preferences.clear();
       digitalWrite(16, LOW);
       delay(100);
@@ -109,7 +108,7 @@ void setup() {
 }
 
 void loop() {
-  digitalWrite(16, LOW);
+  digitalWrite(16, HIGH);
   bool isSetup = preferences.getBool("isSetup", true);
   char body[1024];
   timeout = millis();
@@ -178,7 +177,7 @@ void loop() {
   }
   if (timeout >= (60000 * 5)) {
     preferences.putBool("isSetup", false);
-    digitalWrite(16, LOW);
+    digitalWrite(16, HIGH);
   }
   if (!isSetup) {
     Serial.println("Entering sleep mode");
