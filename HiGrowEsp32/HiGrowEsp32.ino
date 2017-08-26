@@ -1,15 +1,19 @@
 #include <WiFi.h>
-#include <WiFiClient.h>
-#include <WiFiServer.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
-#include <SimpleDHT.h>
+#include "DHT.h"
+#include <ESP.h>
+
+//#define DHTTYPE DHT11   // DHT 11
+//#define DHTTYPE DHT21   // DHT 21 (AM2301)
+#define DHTTYPE DHT11   // DHT 22  (AM2302), AM2321
+#define uS_TO_S_FACTOR 1000000
+
+bool wifi_setup_mode = true;
 
 Preferences preferences;
 
 WiFiServer server(80);
-
-SimpleDHT11 dht11;
 
 HTTPClient http;
 
@@ -17,31 +21,41 @@ uint64_t chipid;
 
 long timeout;
 
+const int dhtpin = 22;
+const int soilpin = 32;
+
+// Initialize DHT sensor.
+DHT dht(dhtpin, DHTTYPE);
+
+// Temporary variables
+static char celsiusTemp[7];
+static char humidityTemp[7];
+
+// Client variables 
+char linebuf[80];
+int charcount=0;
+
+String ssid;
+String pwd;
+
 char deviceid[21];
 
 void setup() {
+  dht.begin();
+  
   Serial.begin(115200);
-
+  while(!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+  esp_deep_sleep_enable_timer_wakeup(1800 * uS_TO_S_FACTOR);
+  esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
   preferences.begin("higrow", false);
 
   pinMode(16, OUTPUT); 
-  pinMode(0, INPUT);
-  digitalWrite(16, HIGH);
+  pinMode(34, INPUT);
+  digitalWrite(16, LOW);  
 
-  for (int j = 0; j < 30; j++) {
-    if (digitalRead(0) == LOW) {
-      preferences.clear();
-      digitalWrite(16, LOW);
-      delay(100);
-      digitalWrite(16, HIGH);
-      delay(100);
-      digitalWrite(16, LOW);
-      delay(100);
-      digitalWrite(16, HIGH);
-      j=30;
-    }
-    delay(100);
-  }
+  wifi_setup_mode = digitalRead(34)==HIGH;
 
   timeout = 0;
 
@@ -49,138 +63,126 @@ void setup() {
   sprintf(deviceid, "%" PRIu64, chipid);
   Serial.println(deviceid);
 
-  String ssid = preferences.getString("ssid");
-  String pwd = preferences.getString("pwd");
+  ssid = preferences.getString("ssid");
+  pwd = preferences.getString("pwd");
 
-  if (ssid.length() > 0 && pwd.length() > 0) {
-    // We start by connecting to a WiFi network
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-
-    WiFi.begin(ssid.c_str(), pwd.c_str());
-
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
-
-    digitalWrite(16, HIGH);
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    //Init WiFi as Station, start SmartConfig
+  if (wifi_setup_mode) {
+    Serial.println("Smart Config");
+    
     WiFi.mode(WIFI_AP_STA);
     WiFi.beginSmartConfig();
 
-    //Wait for SmartConfig packet from mobile
-    Serial.println("Waiting for SmartConfig.");
     while (!WiFi.smartConfigDone()) {
-      int led = digitalRead(16);
-      if (led == HIGH) {
-        digitalWrite(16, LOW);
-      } else {
-        digitalWrite(16, HIGH);
-      }
       delay(500);
       Serial.print(".");
     }
-    Serial.println("SmartConfig received.");
-
-    //Wait for WiFi to connect to AP
-    Serial.println("Waiting for WiFi");
+    
+    Serial.println("Got Credentials");
+    
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.print(".");
     }
-    Serial.println("");
-    Serial.println("WiFi Connected.");
+    
+    Serial.println("WiFi connected");
 
     preferences.putString("ssid", WiFi.SSID());
     preferences.putString("pwd", WiFi.psk());
 
-    Serial.print("IP Address: ");
+    delay(1000);
     Serial.println(WiFi.localIP());
+    preferences.putBool("isSetup", true);
+    server.begin();    
+  }else{
+    Serial.println("WiFi");
+    
+    WiFi.begin(ssid.c_str(), pwd.c_str());
+  
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+    }
   }
 
-  server.begin();
 }
 
 void loop() {
-  digitalWrite(16, HIGH);
-  bool isSetup = preferences.getBool("isSetup", true);
+  
   char body[1024];
-  timeout = millis();
-  WiFiClient client = server.available();   // listen for incoming clients
+  digitalWrite(16, LOW); //switched on
 
-  byte temperature = 0;
-  byte humidity = 0;
-  byte data[40] = {0};
-  dht11.read(2, &temperature, &humidity, data);
-  String did = String(deviceid);
-  String water = String(analogRead(4));
-  String temp = String((double)temperature);
-  String humi = String((int)humidity);
-
-  strcpy(body, "{\"deviceId\":\"");
-  strcat(body, deviceid);
-  strcat(body, "\",\"water\":\"");
-  strcat(body, water.c_str());
-  strcat(body, "\",\"humidity\":\"");
-  strcat(body, humi.c_str());
-  strcat(body, "\",\"temperature\":\"");
-  strcat(body, temp.c_str());
-  strcat(body, "\"}");
-  if (!isSetup) {
+  if(wifi_setup_mode){
+    WiFiClient client = server.available(); 
+    if (client) {
+      sensorsData(body);
+      Serial.println("New client");
+      memset(linebuf,0,sizeof(linebuf));
+      charcount=0;                       
+      String currentLine = "";   
+      while (client.connected()) {       
+        if (client.available()) {         
+          char c = client.read();    
+          Serial.write(c);
+          linebuf[charcount]=c;
+          if (charcount<sizeof(linebuf)-1) charcount++;                   
+          if (c == '\n') {                   
+            
+            if (currentLine.length() == 0) {
+  
+              client.println("HTTP/1.1 200 OK");
+              client.println("Content-type:application/json");
+              client.println();
+              client.print(body);
+              client.println();
+              break;
+            } else {   
+              currentLine = "";
+            }
+          } else if (c != '\r') { 
+            currentLine += c;  
+          }
+        }
+      }
+      delay(1);
+      client.stop();
+      Serial.println("client disconnected");
+    }
+  }else{
+    sensorsData(body);
     http.begin("http://higrowapp.azurewebsites.net/api/records");
     http.addHeader("Content-Type", "application/json");
     int httpResponseCode = http.POST(body);
-
     Serial.println(httpResponseCode);
-    Serial.println(body);
-  }
-  if (client) {                             // print a message out the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        if (c == '\n') {                    // if the byte is a newline character
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:application/json");
-            client.println();
-
-            // the content of the HTTP response follows the header:
-            client.print(body);
-
-            // The HTTP response ends with another blank line:
-            client.println();
-            // break out of the while loop:
-            break;
-          } else {    // if you got a newline, then clear currentLine:
-            currentLine = "";
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-      }
-    }
-    // close the connection:
-    client.stop();
-    Serial.println("client disonnected");
-  }
-  if (timeout >= (60000 * 5)) {
-    preferences.putBool("isSetup", false);
-    digitalWrite(16, HIGH);
-  }
-  if (!isSetup) {
-    Serial.println("Entering sleep mode");
-    system_deep_sleep(60000000 * 10);
+    esp_deep_sleep_start();
   }
 }
+
+void sensorsData(char* body){
+
+  //This section read sensors
+  timeout = millis();
+  
+  int waterlevel = analogRead(soilpin)/4;
+  
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float humidity = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  float temperature = dht.readTemperature();
+  
+  float hic = dht.computeHeatIndex(temperature, humidity, false);       
+  dtostrf(hic, 6, 2, celsiusTemp);               
+  dtostrf(humidity, 6, 2, humidityTemp);
+  
+  String did = String(deviceid);
+  String water = String((int)waterlevel);
+
+  strcpy(body, "{\"deviceId\":\"");
+  strcat(body, did.c_str());
+  strcat(body, "\",\"water\":\"");
+  strcat(body, water.c_str());
+  strcat(body, "\",\"humidity\":\"");
+  strcat(body, humidityTemp);
+  strcat(body, "\",\"temperature\":\"");
+  strcat(body, celsiusTemp);
+  strcat(body, "\"}");
+}
+
