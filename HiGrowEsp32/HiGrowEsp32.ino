@@ -1,6 +1,5 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <Preferences.h>
 #include "DHT.h"
 #include <ESP.h>
 
@@ -9,9 +8,8 @@
 #define DHTTYPE DHT11   // DHT 22  (AM2302), AM2321
 #define uS_TO_S_FACTOR 1000000
 
-bool wifi_setup_mode = true;
-
-Preferences preferences;
+unsigned long now;
+int DEEPSLEEP_SECONDS = 1800;
 
 WiFiServer server(80);
 
@@ -23,6 +21,8 @@ long timeout;
 
 const int dhtpin = 22;
 const int soilpin = 32;
+const int POWER_PIN = 34;
+const int LIGHT_PIN = 33;
 
 // Initialize DHT sensor.
 DHT dht(dhtpin, DHTTYPE);
@@ -35,8 +35,8 @@ static char humidityTemp[7];
 char linebuf[80];
 int charcount=0;
 
-String ssid;
-String pwd;
+String ssid = "YOURSSID";
+String pwd = "YOURPWD";
 
 char deviceid[21];
 
@@ -49,60 +49,17 @@ void setup() {
   }
   esp_deep_sleep_enable_timer_wakeup(1800 * uS_TO_S_FACTOR);
   esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
-  preferences.begin("higrow", false);
 
   pinMode(16, OUTPUT); 
-  pinMode(34, INPUT);
+  pinMode(POWER_PIN, INPUT);
   digitalWrite(16, LOW);  
-
-  wifi_setup_mode = digitalRead(34)==HIGH;
 
   timeout = 0;
 
   chipid = ESP.getEfuseMac();
   sprintf(deviceid, "%" PRIu64, chipid);
+  Serial.print("DeviceId: ");
   Serial.println(deviceid);
-
-  ssid = preferences.getString("ssid");
-  pwd = preferences.getString("pwd");
-
-  if (wifi_setup_mode) {
-    Serial.println("Smart Config");
-    
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.beginSmartConfig();
-
-    while (!WiFi.smartConfigDone()) {
-      delay(500);
-      Serial.print(".");
-    }
-    
-    Serial.println("Got Credentials");
-    
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
-    
-    Serial.println("WiFi connected");
-
-    preferences.putString("ssid", WiFi.SSID());
-    preferences.putString("pwd", WiFi.psk());
-
-    delay(1000);
-    Serial.println(WiFi.localIP());
-    preferences.putBool("isSetup", true);
-    server.begin();    
-  }else{
-    Serial.println("WiFi");
-    
-    WiFi.begin(ssid.c_str(), pwd.c_str());
-  
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-    }
-  }
-
 }
 
 void loop() {
@@ -110,50 +67,14 @@ void loop() {
   char body[1024];
   digitalWrite(16, LOW); //switched on
 
-  if(wifi_setup_mode){
-    WiFiClient client = server.available(); 
-    if (client) {
-      sensorsData(body);
-      Serial.println("New client");
-      memset(linebuf,0,sizeof(linebuf));
-      charcount=0;                       
-      String currentLine = "";   
-      while (client.connected()) {       
-        if (client.available()) {         
-          char c = client.read();    
-          Serial.write(c);
-          linebuf[charcount]=c;
-          if (charcount<sizeof(linebuf)-1) charcount++;                   
-          if (c == '\n') {                   
-            
-            if (currentLine.length() == 0) {
+  sensorsData(body);
+  http.begin("http://api.higrow.tech/api/records");
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.POST(body);
+  Serial.println(httpResponseCode);
+  esp_deep_sleep_enable_timer_wakeup(DEEPSLEEP_SECONDS * uS_TO_S_FACTOR);
+  esp_deep_sleep_start();
   
-              client.println("HTTP/1.1 200 OK");
-              client.println("Content-type:application/json");
-              client.println();
-              client.print(body);
-              client.println();
-              break;
-            } else {   
-              currentLine = "";
-            }
-          } else if (c != '\r') { 
-            currentLine += c;  
-          }
-        }
-      }
-      delay(1);
-      client.stop();
-      Serial.println("client disconnected");
-    }
-  }else{
-    sensorsData(body);
-    http.begin("http://higrowapp.azurewebsites.net/api/records");
-    http.addHeader("Content-Type", "application/json");
-    int httpResponseCode = http.POST(body);
-    Serial.println(httpResponseCode);
-    esp_deep_sleep_start();
-  }
 }
 
 void sensorsData(char* body){
@@ -161,7 +82,13 @@ void sensorsData(char* body){
   //This section read sensors
   timeout = millis();
   
-  int waterlevel = analogRead(soilpin)/4;
+  int waterlevel = analogRead(soilpin);
+  int lightlevel = analogRead(LIGHT_PIN);
+  
+  waterlevel = map(waterlevel, 0, 4095, 0, 1023);
+  waterlevel = constrain(waterlevel, 0, 1023);
+  lightlevel = map(lightlevel, 0, 4095, 0, 1023);
+  lightlevel = constrain(lightlevel, 0, 1023);
   
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   float humidity = dht.readHumidity();
@@ -174,15 +101,22 @@ void sensorsData(char* body){
   
   String did = String(deviceid);
   String water = String((int)waterlevel);
+  String light = String((int)lightlevel);
 
   strcpy(body, "{\"deviceId\":\"");
   strcat(body, did.c_str());
   strcat(body, "\",\"water\":\"");
   strcat(body, water.c_str());
+  strcat(body, "\",\"light\":\"");
+  strcat(body, light.c_str());
   strcat(body, "\",\"humidity\":\"");
   strcat(body, humidityTemp);
   strcat(body, "\",\"temperature\":\"");
   strcat(body, celsiusTemp);
   strcat(body, "\"}");
+
+  if(lightlevel<100){
+    DEEPSLEEP_SECONDS = 10800;
+  }
 }
 
