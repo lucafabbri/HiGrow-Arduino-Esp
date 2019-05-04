@@ -6,7 +6,7 @@
 //#define DHTTYPE DHT11   // DHT 11
 //#define DHTTYPE DHT21   // DHT 21 (AM2301)
 #define DHTTYPE DHT11   // DHT 22  (AM2302), AM2321
-#define uS_TO_S_FACTOR 1000000
+#define uS_TO_S_FACTOR 1000000LL
 
 unsigned long now;
 int DEEPSLEEP_SECONDS = 1800;
@@ -72,7 +72,7 @@ void loop() {
   http.addHeader("Content-Type", "application/json");
   int httpResponseCode = http.POST(body);
   Serial.println(httpResponseCode);
-  esp_deep_sleep_enable_timer_wakeup(DEEPSLEEP_SECONDS * uS_TO_S_FACTOR);
+  esp_sleep_enable_timer_wakeup(DEEPSLEEP_SECONDS * uS_TO_S_FACTOR);
   esp_deep_sleep_start();
   
 }
